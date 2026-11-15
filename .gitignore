@@ -1,0 +1,52 @@
+# Environment
+.env
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# ML models (large binary files)
+ml/models/**/*.pkl
+ml/models/**/*.joblib
+ml/data/raw/
+ml/data/processed/
+ml/data/vector_store/
+
+# Logs
+*.log
+backend/logs/
+mlops/monitoring/logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# MLflow
+mlruns/
+mlflow/
+
+# Node
+node_modules/
+frontend/build/
+
+# Docker
+docker/mysql_data/
+
+# Jupyter
+.ipynb_checkpoints/
