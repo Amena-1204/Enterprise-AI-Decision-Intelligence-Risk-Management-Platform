@@ -24,63 +24,11 @@ def _load_model(model_name: str) -> Optional[Any]:
     with open(path, "rb") as f:
         model = pickle.load(f)
     _model_cache[model_name] = model
-    app_logger.info("Model loaded: %s", model_name)
+    app_logger.info("Model loaded: %s  version=%s", model_name, model.get("version", "?"))
     return model
 
 
-def predict_churn(features: Dict[str, Any]) -> Dict[str, Any]:
-    model_bundle = _load_model("churn")
-    if model_bundle:
-        try:
-            X = _scaled_input(model_bundle, _churn_row(features), "CHURN_FEATURE_COLS")
-            prob = float(model_bundle["model"].predict_proba(X)[0][1])
-            prediction = int(prob >= 0.5)
-            top_features = _get_top_features(model_bundle, X, "churn")
-            return _churn_result(prob, prediction, top_features, model_bundle.get("version", "v1.0"))
-        except Exception as e:
-            app_logger.error("Churn model inference error: %s", e)
-    return _rule_based_churn(features)
-
-
-def predict_fraud(features: Dict[str, Any]) -> Dict[str, Any]:
-    model_bundle = _load_model("fraud")
-    if model_bundle:
-        try:
-            X = _scaled_input(model_bundle, _fraud_row(features), "FRAUD_FEATURE_COLS")
-            prob = float(model_bundle["model"].predict_proba(X)[0][1])
-            prediction = int(prob >= 0.5)
-            top_features = _get_top_features(model_bundle, X, "fraud")
-            return _fraud_result(prob, prediction, top_features, model_bundle.get("version", "v1.0"))
-        except Exception as e:
-            app_logger.error("Fraud model inference error: %s", e)
-    return _rule_based_fraud(features)
-
-
-def predict_sales(features: Dict[str, Any]) -> Dict[str, Any]:
-    model_bundle = _load_model("sales")
-    if model_bundle:
-        try:
-            X = _scaled_input(model_bundle, _sales_row(features), "SALES_FEATURE_COLS")
-            base_pred = float(model_bundle["model"].predict(X)[0])
-            horizon = int(features.get("horizon", 7) or 7)
-            # extend the single-step prediction across the horizon (same approach as ml/inference/predictor.py)
-            forecast = [round(base_pred * (1 + 0.01 * i), 2) for i in range(horizon)]
-            return {
-                "forecast": forecast,
-                "horizon_days": horizon,
-                "model_version": model_bundle.get("version", "v1.0"),
-            }
-        except Exception as e:
-            app_logger.error("Sales model inference error: %s", e)
-    return _rule_based_sales(features)
-
-
-# ── Model input construction ──────────────────────────────────────────────────
-# Trained bundles (see ml/training/) expect the canonical feature vector defined in
-# ml/preprocessing/feature_engineering.py, already transformed by the fitted scaler.
-# API payloads use friendlier names (total_orders / lifetime_value), so the aliases
-# and derived features below mirror the training pipeline exactly.
-
+# ── Payment risk encoding (must match feature_engineering.py) ─────────────────
 _PAYMENT_RISK = {
     "credit_card": 1, "debit_card": 1, "paypal": 2,
     "bank_transfer": 1, "crypto": 4, "cash": 3,
@@ -88,7 +36,6 @@ _PAYMENT_RISK = {
 
 
 def _model_feature_names(bundle: Dict, default_attr: str) -> List[str]:
-    """Feature order of the trained bundle, falling back to the canonical list."""
     cols = bundle.get("feature_names")
     if cols:
         return list(cols)
@@ -99,15 +46,19 @@ def _model_feature_names(bundle: Dict, default_attr: str) -> List[str]:
         return []
 
 
-def _scaled_input(bundle: Dict, row: Dict[str, float], default_attr: str) -> np.ndarray:
-    """Build a one-row model input in the bundle's feature order and scale it."""
+def _scaled_input(bundle: Dict, row: Dict[str, float], default_attr: str) -> Optional[np.ndarray]:
     cols = _model_feature_names(bundle, default_attr)
+    if not cols:
+        app_logger.error("No feature names found for bundle — cannot build input vector")
+        return None
     X = np.array([[float(row.get(c, 0) or 0) for c in cols]], dtype=float)
     scaler = bundle.get("scaler")
     if scaler is not None:
         X = scaler.transform(X)
     return X
 
+
+# ── Churn ─────────────────────────────────────────────────────────────────────
 
 def _churn_row(f: Dict[str, Any]) -> Dict[str, float]:
     total_transactions = float(f.get("total_transactions", f.get("total_orders", 0)) or 0)
@@ -120,19 +71,37 @@ def _churn_row(f: Dict[str, Any]) -> Dict[str, float]:
     if not avg_order_value and total_transactions:
         avg_order_value = total_spent / total_transactions
     return {
-        "account_age_days": account_age_days,
-        "total_transactions": total_transactions,
-        "total_spent": total_spent,
-        "avg_order_value": avg_order_value,
+        "account_age_days":        account_age_days,
+        "total_transactions":      total_transactions,
+        "total_spent":             total_spent,
+        "avg_order_value":         avg_order_value,
         "days_since_last_purchase": days_since,
-        "support_tickets": support_tickets,
-        "open_tickets": float(f.get("open_tickets", 0) or 0),
-        "purchase_frequency": total_transactions / months,
-        "avg_monthly_spend": total_spent / months,
-        "is_high_ticket": 1.0 if support_tickets >= 3 else 0.0,
-        "is_inactive_90d": 1.0 if days_since > 90 else 0.0,
+        "support_tickets":         support_tickets,
+        "open_tickets":            float(f.get("open_tickets", 0) or 0),
+        "purchase_frequency":      total_transactions / months,
+        "avg_monthly_spend":       total_spent / months,
+        "is_high_ticket":          1.0 if support_tickets >= 3 else 0.0,
+        "is_inactive_90d":         1.0 if days_since > 90 else 0.0,
     }
 
+
+def predict_churn(features: Dict[str, Any]) -> Dict[str, Any]:
+    bundle = _load_model("churn")
+    if bundle:
+        try:
+            X = _scaled_input(bundle, _churn_row(features), "CHURN_FEATURE_COLS")
+            if X is None:
+                raise ValueError("Could not build feature vector")
+            prob = float(bundle["model"].predict_proba(X)[0][1])
+            prediction = int(prob >= 0.5)
+            top_features = _get_top_features(bundle, X)
+            return _churn_result(prob, prediction, top_features, bundle.get("version", "v1.0"))
+        except Exception as e:
+            app_logger.error("Churn model inference error: %s", e)
+    return _rule_based_churn(features)
+
+
+# ── Fraud ─────────────────────────────────────────────────────────────────────
 
 def _fraud_row(f: Dict[str, Any]) -> Dict[str, float]:
     amount = float(f.get("amount", 0) or 0)
@@ -143,35 +112,78 @@ def _fraud_row(f: Dict[str, Any]) -> Dict[str, float]:
     device = str(f.get("device_type", "") or "").lower()
     unknown_device = 1.0 if (f.get("is_unusual_device") or device == "unknown") else 0.0
     return {
-        "amount": amount,
-        "hour_of_day": hour,
-        "day_of_week": dow,
-        "is_weekend": 1.0 if dow >= 5 else 0.0,
-        "is_night": 1.0 if (hour < 6 or hour > 22) else 0.0,
+        "amount":              amount,
+        "hour_of_day":         hour,
+        "day_of_week":         dow,
+        "is_weekend":          1.0 if dow >= 5 else 0.0,
+        "is_night":            1.0 if (hour < 6 or hour > 22) else 0.0,
         "amount_vs_avg_ratio": ratio,
-        "is_high_amount": 1.0 if ratio > 3 else 0.0,
-        "payment_risk_score": float(_PAYMENT_RISK.get(str(f.get("payment_method", "") or "").lower(), 2)),
-        "is_unknown_device": unknown_device,
+        "is_high_amount":      1.0 if ratio > 3 else 0.0,
+        "payment_risk_score":  float(_PAYMENT_RISK.get(
+            str(f.get("payment_method", "") or "").lower(), 2)),
+        "is_unknown_device":   unknown_device,
     }
 
 
-def _sales_row(f: Dict[str, Any]) -> Dict[str, float]:
-    month = int(f.get("month", 1) or 1)
-    return {
-        "month": float(month),
-        "day_of_week": float(f.get("day_of_week", 0) or 0),
-        "week_of_year": float(f.get("week_of_year", 1) or 1),
-        "quarter": float(f.get("quarter", ((month - 1) // 3) + 1)),
-        "lag_7": float(f.get("lag_7", 0) or 0),
-        "lag_14": float(f.get("lag_14", 0) or 0),
-        "lag_30": float(f.get("lag_30", 0) or 0),
-        "rolling_mean_7": float(f.get("rolling_mean_7", 0) or 0),
-        "rolling_mean_30": float(f.get("rolling_mean_30", 0) or 0),
-        "rolling_std_7": float(f.get("rolling_std_7", 0) or 0),
-    }
+def predict_fraud(features: Dict[str, Any]) -> Dict[str, Any]:
+    bundle = _load_model("fraud")
+    if bundle:
+        try:
+            X = _scaled_input(bundle, _fraud_row(features), "FRAUD_FEATURE_COLS")
+            if X is None:
+                raise ValueError("Could not build feature vector")
+            prob = float(bundle["model"].predict_proba(X)[0][1])
+            prediction = int(prob >= 0.5)
+            top_features = _get_top_features(bundle, X)
+            return _fraud_result(prob, prediction, top_features, bundle.get("version", "v1.0"))
+        except Exception as e:
+            app_logger.error("Fraud model inference error: %s", e)
+    return _rule_based_fraud(features)
 
 
-def _get_top_features(bundle: Dict, X: np.ndarray, model_type: str) -> List[str]:
+# ── Sales ─────────────────────────────────────────────────────────────────────
+
+def predict_sales(features: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Genuine recursive multi-step sales forecast.
+    Uses last_known_revenue stored in the model bundle (populated at training time)
+    as the seed history, then recursively predicts each future step.
+    """
+    bundle = _load_model("sales")
+    horizon = max(1, min(int(features.get("horizon", 7) or 7), 90))
+
+    if bundle:
+        try:
+            from ml.training.train_sales import recursive_forecast
+            import pandas as pd
+
+            last_known = bundle.get("last_known_revenue", [])
+            # Allow caller to override seed history
+            if features.get("last_known_revenue"):
+                last_known = list(features["last_known_revenue"])
+
+            if len(last_known) < 7:
+                raise ValueError("Insufficient history for recursive forecast")
+
+            history_series = pd.Series(last_known)
+            forecast = recursive_forecast(
+                bundle["model"], bundle["scaler"], history_series, horizon=horizon
+            )
+            return {
+                "forecast":      forecast,
+                "horizon_days":  horizon,
+                "model_version": bundle.get("version", "v1.0"),
+                "method":        "recursive_multistep",
+            }
+        except Exception as e:
+            app_logger.error("Sales model inference error: %s", e)
+
+    return _rule_based_sales(features, horizon)
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _get_top_features(bundle: Dict, X: np.ndarray) -> List[str]:
     try:
         feature_names = bundle.get("feature_names", [])
         model = bundle["model"]
@@ -196,23 +208,25 @@ def _risk_level(prob: float) -> str:
 
 def _churn_result(prob: float, prediction: int, features: List[str], version: str) -> Dict:
     return {
-        "prediction": "CHURN" if prediction else "NO_CHURN",
-        "probability": round(prob, 4),
-        "risk_level": _risk_level(prob),
-        "top_features": features,
+        "prediction":    "CHURN" if prediction else "NO_CHURN",
+        "probability":   round(prob, 4),
+        "risk_level":    _risk_level(prob),
+        "top_features":  features,
         "model_version": version,
     }
 
 
 def _fraud_result(prob: float, prediction: int, features: List[str], version: str) -> Dict:
     return {
-        "prediction": "FRAUD" if prediction else "LEGITIMATE",
-        "probability": round(prob, 4),
-        "risk_level": _risk_level(prob),
-        "top_features": features,
+        "prediction":    "FRAUD" if prediction else "LEGITIMATE",
+        "probability":   round(prob, 4),
+        "risk_level":    _risk_level(prob),
+        "top_features":  features,
         "model_version": version,
     }
 
+
+# ── Rule-based fallbacks (used when model is not loaded) ──────────────────────
 
 def _rule_based_churn(f: Dict[str, Any]) -> Dict:
     score = 0.0
@@ -262,9 +276,11 @@ def _rule_based_fraud(f: Dict[str, Any]) -> Dict:
     return _fraud_result(prob, int(prob >= 0.5), features, "rule-based")
 
 
-def _rule_based_sales(f: Dict[str, Any]) -> Dict:
-    base = float(f.get("rolling_mean_7", 10000))
+def _rule_based_sales(f: Dict[str, Any], horizon: int = 7) -> Dict:
+    base = float(f.get("rolling_mean_7", 10_000))
     return {
-        "forecast": [round(base * (1 + 0.02 * i), 2) for i in range(7)],
+        "forecast":      [round(base, 2)] * horizon,
+        "horizon_days":  horizon,
         "model_version": "rule-based",
+        "method":        "rule_based_constant",
     }

@@ -1,18 +1,16 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate, NavLink } from "react-router-dom";
-import Dashboard from "./pages/Dashboard";
-import Customers from "./pages/Customers";
-import Predictions from "./pages/Predictions";
-import FraudPage from "./pages/FraudPage";
-import ChurnPage from "./pages/ChurnPage";
-import AIAssistant from "./pages/AIAssistant";
-import Login from "./pages/Login";
+import Dashboard       from "./pages/Dashboard";
+import Customers       from "./pages/Customers";
+import Predictions     from "./pages/Predictions";
+import FraudPage       from "./pages/FraudPage";
+import ChurnPage       from "./pages/ChurnPage";
+import SegmentationPage from "./pages/SegmentationPage";
+import AIAssistant     from "./pages/AIAssistant";
+import Login           from "./pages/Login";
 
 export const AuthContext = createContext(null);
-
-export function useAuth() {
-  return useContext(AuthContext);
-}
+export function useAuth() { return useContext(AuthContext); }
 
 function AuthProvider({ children }) {
   const [token, setToken] = useState(() => localStorage.getItem("token"));
@@ -20,11 +18,11 @@ function AuthProvider({ children }) {
     try { return JSON.parse(localStorage.getItem("user")); } catch { return null; }
   });
 
-  const login = (token, user) => {
-    localStorage.setItem("token", token);
-    localStorage.setItem("user", JSON.stringify(user));
-    setToken(token);
-    setUser(user);
+  const login = (tok, usr) => {
+    localStorage.setItem("token", tok);
+    localStorage.setItem("user", JSON.stringify(usr));
+    setToken(tok);
+    setUser(usr);
   };
 
   const logout = () => {
@@ -49,12 +47,13 @@ function PrivateRoute({ children }) {
 function Nav() {
   const { user, logout } = useAuth();
   const links = [
-    { to: "/", label: "Dashboard" },
-    { to: "/customers", label: "Customers" },
+    { to: "/",            label: "Dashboard" },
+    { to: "/customers",   label: "Customers" },
     { to: "/predictions", label: "Predictions" },
-    { to: "/fraud", label: "Fraud" },
-    { to: "/churn", label: "Churn" },
-    { to: "/ai", label: "AI Assistant" },
+    { to: "/fraud",       label: "Fraud" },
+    { to: "/churn",       label: "Churn" },
+    { to: "/segments",    label: "Segments" },
+    { to: "/ai",          label: "AI Assistant" },
   ];
 
   return (
@@ -66,7 +65,10 @@ function Nav() {
             key={to}
             to={to}
             end={to === "/"}
-            style={({ isActive }) => ({ ...styles.navLink, ...(isActive ? styles.navLinkActive : {}) })}
+            style={({ isActive }) => ({
+              ...styles.navLink,
+              ...(isActive ? styles.navLinkActive : {}),
+            })}
           >
             {label}
           </NavLink>
@@ -94,12 +96,13 @@ export default function App() {
                   <Nav />
                   <main style={styles.main}>
                     <Routes>
-                      <Route path="/" element={<Dashboard />} />
-                      <Route path="/customers" element={<Customers />} />
+                      <Route path="/"            element={<Dashboard />} />
+                      <Route path="/customers"   element={<Customers />} />
                       <Route path="/predictions" element={<Predictions />} />
-                      <Route path="/fraud" element={<FraudPage />} />
-                      <Route path="/churn" element={<ChurnPage />} />
-                      <Route path="/ai" element={<AIAssistant />} />
+                      <Route path="/fraud"       element={<FraudPage />} />
+                      <Route path="/churn"       element={<ChurnPage />} />
+                      <Route path="/segments"    element={<SegmentationPage />} />
+                      <Route path="/ai"          element={<AIAssistant />} />
                     </Routes>
                   </main>
                 </div>
@@ -113,20 +116,21 @@ export default function App() {
 }
 
 const styles = {
-  layout: { display: "flex", flexDirection: "column", minHeight: "100vh", background: "#f0f2f5" },
+  layout:        { display: "flex", flexDirection: "column", minHeight: "100vh", background: "#f0f2f5" },
   nav: {
     display: "flex", alignItems: "center", background: "#1a1a2e", color: "#fff",
-    padding: "0 24px", height: 56, gap: 24, position: "sticky", top: 0, zIndex: 100,
+    padding: "0 24px", height: 56, gap: 16, position: "sticky", top: 0, zIndex: 100,
+    flexWrap: "wrap",
   },
-  brand: { fontWeight: 700, fontSize: 18, color: "#7c83fd", whiteSpace: "nowrap" },
-  navLinks: { display: "flex", gap: 4, flex: 1 },
+  brand:         { fontWeight: 700, fontSize: 18, color: "#7c83fd", whiteSpace: "nowrap" },
+  navLinks:      { display: "flex", gap: 2, flex: 1, flexWrap: "wrap" },
   navLink: {
-    color: "#aaa", textDecoration: "none", padding: "6px 12px",
-    borderRadius: 6, fontSize: 14, transition: "all 0.2s",
+    color: "#aaa", textDecoration: "none", padding: "6px 10px",
+    borderRadius: 6, fontSize: 13, transition: "all 0.2s",
   },
   navLinkActive: { color: "#fff", background: "#7c83fd22" },
-  navUser: { display: "flex", alignItems: "center", gap: 12 },
-  userLabel: { fontSize: 13, color: "#aaa" },
+  navUser:       { display: "flex", alignItems: "center", gap: 12 },
+  userLabel:     { fontSize: 13, color: "#aaa" },
   logoutBtn: {
     background: "transparent", border: "1px solid #555", color: "#ccc",
     padding: "4px 12px", borderRadius: 6, cursor: "pointer", fontSize: 13,

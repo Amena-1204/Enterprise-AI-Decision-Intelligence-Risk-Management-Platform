@@ -1,14 +1,21 @@
 from typing import Dict, Optional, Tuple
 
-from flask import current_app
+from flask import current_app, request
 
 from backend.app.models.user import User
+from backend.app.models.audit_log import write_audit_log
 from backend.app.utils.security import generate_token, hash_password, verify_password
 from backend.app.utils.validators import validate_email, validate_password
 from backend.app.utils.logger import app_logger
 
 
-def register_user(username: str, email: str, password: str, role: str = "viewer") -> Tuple[bool, str, Optional[int]]:
+def _client_ip() -> Optional[str]:
+    return request.remote_addr if request else None
+
+
+def register_user(
+    username: str, email: str, password: str, role: str = "viewer"
+) -> Tuple[bool, str, Optional[int]]:
     if not validate_email(email):
         return False, "Invalid email address", None
 
@@ -22,12 +29,27 @@ def register_user(username: str, email: str, password: str, role: str = "viewer"
     hashed = hash_password(password)
     user_id = User.create(username, email, hashed, role)
     app_logger.info("New user registered: %s (id=%s)", email, user_id)
+    write_audit_log(
+        action="user_register",
+        user_id=user_id,
+        resource="users",
+        resource_id=str(user_id),
+        ip_address=_client_ip(),
+        details={"username": username, "role": role},
+    )
     return True, "User registered successfully", user_id
 
 
-def login_user(email: str, password: str) -> Tuple[bool, str, Optional[Dict]]:
+def login_user(
+    email: str, password: str
+) -> Tuple[bool, str, Optional[Dict]]:
     user = User.find_by_email(email)
     if not user:
+        write_audit_log(
+            action="login_failed",
+            ip_address=_client_ip(),
+            details={"reason": "user_not_found", "email": email},
+        )
         return False, "Invalid credentials", None
 
     if not user.get("is_active"):
@@ -35,6 +57,12 @@ def login_user(email: str, password: str) -> Tuple[bool, str, Optional[Dict]]:
 
     if not verify_password(password, user["password_hash"]):
         app_logger.warning("Failed login attempt for: %s", email)
+        write_audit_log(
+            action="login_failed",
+            user_id=user["id"],
+            ip_address=_client_ip(),
+            details={"reason": "wrong_password"},
+        )
         return False, "Invalid credentials", None
 
     token = generate_token(
@@ -43,7 +71,19 @@ def login_user(email: str, password: str) -> Tuple[bool, str, Optional[Dict]]:
         expires_in=current_app.config.get("JWT_ACCESS_TOKEN_EXPIRES", 3600),
     )
     app_logger.info("User logged in: %s", email)
+    write_audit_log(
+        action="login_success",
+        user_id=user["id"],
+        resource="users",
+        resource_id=str(user["id"]),
+        ip_address=_client_ip(),
+    )
     return True, "Login successful", {
         "token": token,
-        "user": {"id": user["id"], "username": user["username"], "email": user["email"], "role": user["role"]},
+        "user": {
+            "id": user["id"],
+            "username": user["username"],
+            "email": user["email"],
+            "role": user["role"],
+        },
     }

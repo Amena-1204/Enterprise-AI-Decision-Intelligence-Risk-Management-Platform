@@ -1,13 +1,36 @@
 import os
+import warnings
 from dotenv import load_dotenv
 
 load_dotenv()
 
+_WEAK_SECRETS = {
+    "change-me-to-a-random-secret-key",
+    "change-me-to-a-random-jwt-secret",
+    "dev-secret-key",
+    "dev-jwt-secret",
+    "REPLACE_WITH_RANDOM_HEX_32",
+}
+
+
+def _require_secret(value: str, name: str) -> str:
+    if not value or value in _WEAK_SECRETS or len(value) < 16:
+        warnings.warn(
+            f"[SECURITY] {name} is weak or default. "
+            "Generate a real secret: python -c \"import secrets; print(secrets.token_hex(32))\"",
+            stacklevel=3,
+        )
+    return value
+
 
 class Config:
-    SECRET_KEY: str = os.environ.get("FLASK_SECRET_KEY", "dev-secret-key")
-    JWT_SECRET_KEY: str = os.environ.get("JWT_SECRET_KEY", "dev-jwt-secret")
-    JWT_ACCESS_TOKEN_EXPIRES: int = 3600  # seconds
+    SECRET_KEY: str = _require_secret(
+        os.environ.get("FLASK_SECRET_KEY", "dev-secret-key"), "FLASK_SECRET_KEY"
+    )
+    JWT_SECRET_KEY: str = _require_secret(
+        os.environ.get("JWT_SECRET_KEY", "dev-jwt-secret"), "JWT_SECRET_KEY"
+    )
+    JWT_ACCESS_TOKEN_EXPIRES: int = int(os.environ.get("JWT_ACCESS_TOKEN_EXPIRES", 3600))
 
     # MySQL
     DB_HOST: str = os.environ.get("DB_HOST", "localhost")
@@ -36,6 +59,14 @@ class Config:
     DOCUMENTS_DIR: str = os.path.join(BASE_DIR, "..", "documents")
     VECTOR_STORE_DIR: str = os.path.join(BASE_DIR, "..", "ml", "data", "vector_store")
 
+    # Security
+    MAX_CONTENT_LENGTH: int = int(os.environ.get("MAX_CONTENT_LENGTH", 1_048_576))  # 1 MB
+
+    # Rate limiting
+    RATELIMIT_DEFAULT: str = os.environ.get("RATELIMIT_DEFAULT", "60 per minute")
+    RATELIMIT_STORAGE_URL: str = os.environ.get("RATELIMIT_STORAGE_URL", "memory://")
+    RATELIMIT_HEADERS_ENABLED: bool = True
+
 
 class DevelopmentConfig(Config):
     DEBUG: bool = True
@@ -48,6 +79,8 @@ class ProductionConfig(Config):
 class TestingConfig(Config):
     TESTING: bool = True
     DB_NAME: str = "enterprise_ai_test"
+    # Disable rate limiting in tests
+    RATELIMIT_ENABLED: bool = False
 
 
 config_map = {

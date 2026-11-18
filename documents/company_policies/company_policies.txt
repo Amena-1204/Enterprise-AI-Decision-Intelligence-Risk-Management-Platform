@@ -1,0 +1,37 @@
+Enterprise AI Platform — Company Policies
+==========================================
+
+ACCEPTABLE USE POLICY
+---------------------
+The platform is intended for authorised business analysts, administrators,
+and viewers only. Sharing login credentials is prohibited. All access is
+logged and audited. Misuse may result in account suspension.
+
+ROLES AND PERMISSIONS
+---------------------
+admin:    Full access — can create users, trigger model retraining,
+          delete customers, and view all reports.
+analyst:  Can view and create customers, run predictions, view all
+          dashboards and reports. Cannot manage users or retrain models.
+viewer:   Read-only access to dashboards and reports.
+
+PASSWORD POLICY
+---------------
+Minimum 8 characters. Must contain at least one uppercase letter and one digit.
+Passwords are hashed using PBKDF2-HMAC-SHA256 with 310,000 iterations.
+Passwords must be changed every 90 days for admin accounts.
+
+INCIDENT RESPONSE
+-----------------
+Security incidents must be reported to the security team within 1 hour.
+Fraud alerts with CRITICAL risk level trigger automatic notifications.
+All prediction results are stored with model version and timestamp for audit.
+
+MODEL GOVERNANCE
+----------------
+All ML models are versioned and tracked in MLflow.
+Model performance is monitored using Population Stability Index (PSI).
+PSI < 0.10: model is stable.
+PSI 0.10 – 0.20: warning — review model performance.
+PSI > 0.20: drift detected — retrain model immediately.
+Model retraining requires admin role and is logged in audit_logs.

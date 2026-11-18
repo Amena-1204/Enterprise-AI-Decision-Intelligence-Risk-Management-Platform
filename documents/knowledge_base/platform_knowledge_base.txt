@@ -1,0 +1,84 @@
+Enterprise AI Platform — Business Intelligence Knowledge Base
+============================================================
+
+OVERVIEW
+--------
+The Enterprise AI Decision Intelligence Platform provides real-time business
+intelligence through machine learning models, an AI assistant, and interactive
+dashboards. It covers four core analytical domains: fraud detection, customer
+churn prediction, sales forecasting, and customer segmentation.
+
+FRAUD DETECTION
+---------------
+The fraud detection model scores every financial transaction in real time.
+It uses a Random Forest or XGBoost classifier trained on nine transaction
+features: amount, hour of day, day of week, weekend flag, night-time flag,
+amount-vs-customer-average ratio, high-amount flag, payment method risk score,
+and unknown device flag.
+
+Risk levels:
+- LOW      (probability < 0.40): normal transaction, no action required.
+- MEDIUM   (0.40 – 0.60):        flag for manual review.
+- HIGH     (0.60 – 0.80):        escalate to fraud team.
+- CRITICAL (>= 0.80):            block transaction immediately.
+
+Payment method risk scores: credit card = 1, debit card = 1,
+bank transfer = 1, PayPal = 2, cash = 3, crypto = 4.
+
+CUSTOMER CHURN PREDICTION
+--------------------------
+The churn model predicts the probability that a customer will stop purchasing
+within the next 90 days. Features include account age, total transactions,
+total spend, average order value, days since last purchase, support ticket
+count, open tickets, purchase frequency, average monthly spend, high-ticket
+flag, and 90-day inactivity flag.
+
+Customers with churn probability >= 0.60 are classified HIGH or CRITICAL risk
+and should receive proactive retention outreach.
+
+SALES FORECASTING
+-----------------
+The sales forecasting model uses a Gradient Boosting Regressor with recursive
+multi-step prediction. It is trained on daily revenue data with lag features
+(7-day, 14-day, 30-day lags), rolling averages, and calendar features
+(month, day of week, week of year, quarter).
+
+The recursive approach: each predicted day becomes the lag input for the next
+day, allowing genuine multi-horizon forecasts without data leakage.
+
+CUSTOMER SEGMENTATION
+---------------------
+Customers are grouped into five segments using KMeans clustering:
+- High Value:     Top revenue contributors, frequent buyers, long tenure.
+- Loyal:          Consistent purchasers with strong recent activity.
+- At Risk:        Previously active customers now showing disengagement.
+- New Customer:   Recently acquired, still in onboarding phase.
+- Low Engagement: Minimal activity, low purchase frequency.
+
+REFUND AND CANCELLATION POLICY
+-------------------------------
+Refund requests must be submitted within 30 days of purchase.
+Software licences are non-refundable after activation.
+Service contracts may be cancelled with 30 days written notice.
+Consulting engagements are billed on completion of milestones.
+
+SLA AND SUPPORT
+---------------
+Premium Support Plan: 4-hour response time, 24/7 coverage.
+Standard Support:     Next business day response.
+Critical incidents (P1): 1-hour response, 4-hour resolution target.
+High incidents (P2):     4-hour response, 8-hour resolution target.
+
+DATA PRIVACY
+------------
+All customer data is stored in encrypted MySQL databases.
+Personal data is processed in accordance with GDPR and applicable regulations.
+Data retention: transaction records are kept for 7 years; behavioural data
+for 3 years. Customers may request data deletion via the support portal.
+
+API USAGE LIMITS
+----------------
+Default rate limit: 60 requests per minute per IP address.
+Authentication endpoints: 20 login attempts per minute per IP.
+Registration: 10 registrations per hour per IP.
+Maximum request body size: 1 MB.

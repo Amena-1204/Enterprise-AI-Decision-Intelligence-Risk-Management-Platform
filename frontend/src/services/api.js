@@ -21,16 +21,17 @@ api.interceptors.response.use(
 );
 
 export const auth = {
-  login: (email, password) => api.post("/auth/login", { email, password }),
-  register: (data) => api.post("/auth/register", data),
+  login:    (email, password) => api.post("/auth/login", { email, password }),
+  register: (data)            => api.post("/auth/register", data),
 };
 
 export const customers = {
-  list: (limit = 100, offset = 0) => api.get(`/customers?limit=${limit}&offset=${offset}`),
-  get: (id) => api.get(`/customers/${id}`),
-  create: (data) => api.post("/customers", data),
-  update: (id, data) => api.put(`/customers/${id}`, data),
-  delete: (id) => api.delete(`/customers/${id}`),
+  list:            (limit = 100, offset = 0) => api.get(`/customers?limit=${limit}&offset=${offset}`),
+  get:             (id)                      => api.get(`/customers/${id}`),
+  create:          (data)                    => api.post("/customers", data),
+  update:          (id, data)                => api.put(`/customers/${id}`, data),
+  delete:          (id)                      => api.delete(`/customers/${id}`),
+  transactions:    (id, limit = 50)          => api.get(`/customers/${id}/transactions?limit=${limit}`),
 };
 
 export const dashboard = {
@@ -38,11 +39,11 @@ export const dashboard = {
 };
 
 export const predictions = {
-  churnList: () => api.get("/predictions/churn"),
+  churnList:    ()     => api.get("/predictions/churn"),
   predictChurn: (data) => api.post("/predictions/churn", data),
-  fraudList: () => api.get("/predictions/fraud"),
+  fraudList:    ()     => api.get("/predictions/fraud"),
   predictFraud: (data) => api.post("/predictions/fraud", data),
-  salesList: () => api.get("/predictions/sales"),
+  salesList:    ()     => api.get("/predictions/sales"),
   predictSales: (data) => api.post("/predictions/sales", data),
 };
 
@@ -53,18 +54,24 @@ export const fraud = {
 
 export const churn = {
   overview: () => api.get("/churn"),
-  atRisk: () => api.get("/churn/at-risk"),
+  atRisk:   () => api.get("/churn/at-risk"),
 };
 
 export const sales = {
-  list: (region) => api.get(`/sales${region ? `?region=${region}` : ""}`),
-  summary: () => api.get("/sales/summary"),
+  list:    (region) => api.get(`/sales${region ? `?region=${region}` : ""}`),
+  summary: ()       => api.get("/sales/summary"),
+};
+
+export const segments = {
+  list:    ()     => api.get("/segments"),
+  summary: ()     => api.get("/segments/summary"),
+  predict: (data) => api.post("/segments/predict", data),
 };
 
 export const ai = {
-  ask: (query, features = {}) => api.post("/ai/ask", { query, features }),
-  report: (report_type) => api.post("/ai/report", { report_type }),
-  indexDocuments: () => api.post("/ai/index-documents"),
+  ask:            (query, features = {}) => api.post("/ai/ask", { query, features }),
+  report:         (report_type)          => api.post("/ai/report", { report_type }),
+  indexDocuments: ()                     => api.post("/ai/index-documents"),
 };
 
 export default api;
